@@ -2,10 +2,16 @@ import { SignJWT, jwtVerify } from 'jose';
 import { compare, hash } from 'bcryptjs';
 import { env } from '$env/dynamic/private';
 
-if (!env.SESSION_SECRET) throw new Error('SESSION_SECRET is required');
-const SECRET = new TextEncoder().encode(env.SESSION_SECRET);
 const ALGORITHM = 'HS256';
 const EXPIRY = '30d';
+
+let _secret: Uint8Array | null = null;
+function getSecret() {
+	if (_secret) return _secret;
+	if (!env.SESSION_SECRET) throw new Error('SESSION_SECRET is required');
+	_secret = new TextEncoder().encode(env.SESSION_SECRET);
+	return _secret;
+}
 
 export interface SessionPayload {
 	userId: number;
@@ -17,12 +23,12 @@ export async function createSessionToken(payload: SessionPayload): Promise<strin
 		.setProtectedHeader({ alg: ALGORITHM })
 		.setIssuedAt()
 		.setExpirationTime(EXPIRY)
-		.sign(SECRET);
+		.sign(getSecret());
 }
 
 export async function verifySessionToken(token: string): Promise<SessionPayload | null> {
 	try {
-		const { payload } = await jwtVerify(token, SECRET);
+		const { payload } = await jwtVerify(token, getSecret());
 		return { userId: payload.userId as number, username: payload.username as string };
 	} catch {
 		return null;
