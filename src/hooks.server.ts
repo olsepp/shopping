@@ -2,7 +2,7 @@ import type { Handle } from '@sveltejs/kit';
 import { redirect } from '@sveltejs/kit';
 import { verifySessionToken } from '$lib/server/auth';
 
-const PUBLIC_ROUTES = ['/login'];
+const PUBLIC_ROUTES = ['/login', '/register'];
 
 export const handle: Handle = async ({ event, resolve }) => {
 	const isPublic = PUBLIC_ROUTES.includes(event.url.pathname);
