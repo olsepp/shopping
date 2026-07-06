@@ -21,6 +21,10 @@ export default defineConfig({
 			}
 		}),
 		SvelteKitPWA({
+			kit: {
+				adapterFallback: '/',
+				spa: true
+			},
 			workbox: {
 				navigateFallback: '/',
 				navigateFallbackDenylist: [/^\/api\//],
