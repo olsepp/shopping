@@ -209,7 +209,14 @@
 									class="relative flex items-center border-b border-gray-50 bg-white last:border-0"
 									style="transform: translateX({offsetX}px);"
 								>
-									<form method="POST" action="?/checkItem" use:enhance class="flex-1">
+									<form
+										method="POST"
+										action="?/checkItem"
+										use:enhance={() =>
+											async ({ update }) =>
+												update({ invalidateAll: false })}
+										class="flex-1"
+									>
 										<input type="hidden" name="itemId" value={item.id} />
 										<input type="hidden" name="checked" value={String(!isChecked)} />
 										<button
@@ -233,7 +240,15 @@
 											</span>
 										</button>
 									</form>
-									<form hidden method="POST" action="?/deleteItem" use:enhance id="del-{item.id}">
+									<form
+										hidden
+										method="POST"
+										action="?/deleteItem"
+										use:enhance={() =>
+											async ({ update }) =>
+												update({ invalidateAll: false })}
+										id="del-{item.id}"
+									>
 										<input type="hidden" name="itemId" value={item.id} />
 									</form>
 								</div>
@@ -252,6 +267,7 @@
 			use:enhance={() => {
 				newItemName = '';
 				newItemQty = '';
+				return async ({ update }) => update({ invalidateAll: false });
 			}}
 			class="mt-3 px-4"
 		>
@@ -438,6 +454,7 @@
 					action="?/addRecipe"
 					use:enhance={() => {
 						recipePickerOpen = false;
+						return async ({ update }) => update({ invalidateAll: false });
 					}}
 				>
 					<input type="hidden" name="recipeId" value={recipe.id} />
@@ -471,7 +488,13 @@
 				{dupCount} of {totalCount} items from this recipe are already in the list.
 			</p>
 			<div class="flex flex-col gap-2">
-				<form method="POST" action="?/addRecipe" use:enhance>
+				<form
+					method="POST"
+					action="?/addRecipe"
+					use:enhance={() =>
+						async ({ update }) =>
+							update({ invalidateAll: false })}
+				>
 					<input type="hidden" name="recipeId" value={rid} />
 					<input type="hidden" name="mode" value="add_all" />
 					<button
@@ -481,7 +504,13 @@
 						Add anyway
 					</button>
 				</form>
-				<form method="POST" action="?/addRecipe" use:enhance>
+				<form
+					method="POST"
+					action="?/addRecipe"
+					use:enhance={() =>
+						async ({ update }) =>
+							update({ invalidateAll: false })}
+				>
 					<input type="hidden" name="recipeId" value={rid} />
 					<input type="hidden" name="mode" value="skip_duplicates" />
 					<button
@@ -520,6 +549,7 @@
 				action="?/assignList"
 				use:enhance={() => {
 					assignPickerOpen = false;
+					return async ({ update }) => update({ invalidateAll: false });
 				}}
 			>
 				<input type="hidden" name="userId" value="" />
@@ -543,6 +573,7 @@
 					action="?/assignList"
 					use:enhance={() => {
 						assignPickerOpen = false;
+						return async ({ update }) => update({ invalidateAll: false });
 					}}
 				>
 					<input type="hidden" name="userId" value={user.id} />
@@ -575,6 +606,7 @@
 					action="?/deleteList"
 					use:enhance={() => {
 						deleteListOpen = false;
+						return async ({ update }) => update({ invalidateAll: false });
 					}}
 				>
 					<button

@@ -32,66 +32,60 @@ async function getOrCreateList(date: string) {
 export const load: PageServerLoad = async ({ depends }) => {
 	depends('shopping-list');
 
-	// Today's list
-	const [todayList] = await db
-		.select()
-		.from(shopping_lists)
-		.where(eq(shopping_lists.date, today()))
-		.limit(1);
-
-	let todayItems: (typeof shopping_items.$inferSelect)[] = [];
-	if (todayList) {
-		todayItems = await db
+	const [todayList, allRecipes, allUsers, lists] = await Promise.all([
+		db
 			.select()
-			.from(shopping_items)
-			.where(eq(shopping_items.list_id, todayList.id))
-			.orderBy(asc(shopping_items.position));
-	}
+			.from(shopping_lists)
+			.where(eq(shopping_lists.date, today()))
+			.limit(1)
+			.then((r) => r[0] ?? null),
+		db
+			.select({
+				id: recipes.id,
+				name: recipes.name,
+				ingredientCount: sql<number>`count(${ingredients.id})`.mapWith(Number)
+			})
+			.from(recipes)
+			.leftJoin(ingredients, eq(ingredients.recipe_id, recipes.id))
+			.groupBy(recipes.id)
+			.orderBy(asc(recipes.name)),
+		db.select({ id: users.id, username: users.username }).from(users).orderBy(asc(users.username)),
+		db
+			.select({
+				id: shopping_lists.id,
+				date: shopping_lists.date,
+				assigned_to: shopping_lists.assigned_to,
+				assigned_username: users.username,
+				total: sql<number>`count(${shopping_items.id})`.mapWith(Number),
+				checked:
+					sql<number>`count(${shopping_items.id}) filter (where ${shopping_items.checked})`.mapWith(
+						Number
+					)
+			})
+			.from(shopping_lists)
+			.leftJoin(shopping_items, eq(shopping_items.list_id, shopping_lists.id))
+			.leftJoin(users, eq(shopping_lists.assigned_to, users.id))
+			.groupBy(shopping_lists.id, shopping_lists.date, shopping_lists.assigned_to, users.username)
+			.orderBy(shopping_lists.date)
+	]);
 
-	let assignedToUser: { id: number; username: string } | null = null;
-	if (todayList?.assigned_to) {
-		const [assigned] = await db
-			.select({ id: users.id, username: users.username })
-			.from(users)
-			.where(eq(users.id, todayList.assigned_to))
-			.limit(1);
-		assignedToUser = assigned ?? null;
-	}
-
-	const allRecipes = await db
-		.select({
-			id: recipes.id,
-			name: recipes.name,
-			ingredientCount: sql<number>`count(${ingredients.id})`.mapWith(Number)
-		})
-		.from(recipes)
-		.leftJoin(ingredients, eq(ingredients.recipe_id, recipes.id))
-		.groupBy(recipes.id)
-		.orderBy(asc(recipes.name));
-
-	const allUsers = await db
-		.select({ id: users.id, username: users.username })
-		.from(users)
-		.orderBy(asc(users.username));
-
-	// Calendar lists
-	const lists = await db
-		.select({
-			id: shopping_lists.id,
-			date: shopping_lists.date,
-			assigned_to: shopping_lists.assigned_to,
-			assigned_username: users.username,
-			total: sql<number>`count(${shopping_items.id})`.mapWith(Number),
-			checked:
-				sql<number>`count(${shopping_items.id}) filter (where ${shopping_items.checked})`.mapWith(
-					Number
-				)
-		})
-		.from(shopping_lists)
-		.leftJoin(shopping_items, eq(shopping_items.list_id, shopping_lists.id))
-		.leftJoin(users, eq(shopping_lists.assigned_to, users.id))
-		.groupBy(shopping_lists.id, shopping_lists.date, shopping_lists.assigned_to, users.username)
-		.orderBy(shopping_lists.date);
+	const [todayItems, assignedToUser] = await Promise.all([
+		todayList
+			? db
+					.select()
+					.from(shopping_items)
+					.where(eq(shopping_items.list_id, todayList.id))
+					.orderBy(asc(shopping_items.position))
+			: Promise.resolve([] as (typeof shopping_items.$inferSelect)[]),
+		todayList?.assigned_to
+			? db
+					.select({ id: users.id, username: users.username })
+					.from(users)
+					.where(eq(users.id, todayList.assigned_to))
+					.limit(1)
+					.then((r) => r[0] ?? null)
+			: Promise.resolve(null as { id: number; username: string } | null)
+	]);
 
 	return {
 		todayList,

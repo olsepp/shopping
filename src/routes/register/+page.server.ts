@@ -32,20 +32,13 @@ export const actions: Actions = {
 			return { error: 'Registration is closed' };
 		}
 
-		const [existing] = await db
-			.select()
-			.from(users)
-			.where(eq(users.username, username))
-			.limit(1);
+		const [existing] = await db.select().from(users).where(eq(users.username, username)).limit(1);
 		if (existing) {
 			return { error: 'Username already taken' };
 		}
 
 		const password_hash = await hashPassword(password);
-		const [user] = await db
-			.insert(users)
-			.values({ username, password_hash })
-			.returning();
+		const [user] = await db.insert(users).values({ username, password_hash }).returning();
 
 		const token = await createSessionToken({ userId: user.id, username: user.username });
 		cookies.set('session', token, {
