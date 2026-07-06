@@ -1,6 +1,7 @@
 <script lang="ts">
 	import './layout.css';
-	import { onNavigate } from '$app/navigation';
+	import { onNavigate, goto } from '$app/navigation';
+	import { onMount } from 'svelte';
 	import { page } from '$app/stores';
 	import { ShoppingCart, Book, ClipboardPen } from 'lucide-svelte';
 	import { initSSE } from '$lib/sse.svelte';
@@ -13,6 +14,25 @@
 
 	$effect(() => {
 		if (data.user) initSSE();
+	});
+
+	onMount(() => {
+		const standalone =
+			(window.navigator as any).standalone ||
+			window.matchMedia('(display-mode: standalone)').matches;
+		if (!standalone) return;
+
+		document.addEventListener('click', (e) => {
+			const anchor = (e.target as HTMLElement)?.closest('a');
+			if (!anchor || anchor.target === '_blank' || e.metaKey || e.ctrlKey) return;
+			const url = new URL(anchor.href, window.location.href);
+			if (url.origin !== window.location.origin) return;
+			if (url.pathname === window.location.pathname && url.search === window.location.search) {
+				return;
+			}
+			e.preventDefault();
+			goto(url.pathname + url.search + url.hash);
+		});
 	});
 
 	onNavigate((nav) => {
@@ -44,11 +64,10 @@
 </script>
 
 <svelte:head>
-	{#if data.user}
-		<meta name="mobile-web-app-capable" content="yes" />
-		<meta name="apple-mobile-web-app-capable" content="yes" />
-		<meta name="apple-mobile-web-app-status-bar-style" content="default" />
-	{/if}
+	<meta name="mobile-web-app-capable" content="yes" />
+	<meta name="apple-mobile-web-app-capable" content="yes" />
+	<meta name="apple-mobile-web-app-status-bar-style" content="default" />
+	<meta name="apple-mobile-web-app-title" content="Meal Planner" />
 </svelte:head>
 
 {#if navigating}

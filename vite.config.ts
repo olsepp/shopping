@@ -22,11 +22,10 @@ export default defineConfig({
 		}),
 		SvelteKitPWA({
 			kit: {
-				adapterFallback: '/',
-				spa: true
+				adapterFallback: '/shopping-list'
 			},
 			workbox: {
-				navigateFallback: '/',
+				navigateFallback: '/shopping-list',
 				navigateFallbackDenylist: [/^\/api\//],
 				runtimeCaching: [
 					{
@@ -43,7 +42,7 @@ export default defineConfig({
 				background_color: '#ffcffd',
 				display: 'standalone',
 				scope: '/',
-				start_url: '/',
+				start_url: '/shopping-list',
 				icons: [
 					{
 						src: '/icons/icon.svg',
