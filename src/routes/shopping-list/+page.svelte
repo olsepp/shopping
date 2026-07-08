@@ -46,6 +46,29 @@
 	let showAllDone = $state(false);
 	let allDoneTimer: ReturnType<typeof setTimeout> | null = null;
 	let swipeOffsets = $state<Record<string, number>>({});
+	let seenItemIds = $state<Set<string>>(new Set());
+	let newItemIds = $state<Set<string>>(new Set());
+	let firstLoad = $state(true);
+
+	$effect(() => {
+		const currentIds = new Set(data.todayItems.map((i: { id: string }) => i.id));
+		if (firstLoad) {
+			seenItemIds = new Set(currentIds);
+			firstLoad = false;
+			return;
+		}
+		const fresh = [...currentIds].filter((id) => !seenItemIds.has(id));
+		if (fresh.length) {
+			const nextNew = new Set(newItemIds);
+			const nextSeen = new Set(seenItemIds);
+			for (const id of fresh) {
+				nextNew.add(id);
+				nextSeen.add(id);
+			}
+			newItemIds = nextNew;
+			seenItemIds = nextSeen;
+		}
+	});
 
 	$effect(() => {
 		if (allChecked) {
@@ -205,10 +228,21 @@
 								>
 									<Trash2 class="h-5 w-5" />
 								</div>
-								<div
-									class="relative flex items-center border-b border-gray-50 bg-white last:border-0"
-									style="transform: translateX({offsetX}px);"
-								>
+							<div
+								class="relative flex items-center border-b border-gray-50 bg-white last:border-0 {newItemIds.has(
+									item.id
+								)
+									? 'animate-new-item'
+									: ''}"
+								style="transform: translateX({offsetX}px);"
+								onanimationend={() => {
+									if (newItemIds.has(item.id)) {
+										const next = new Set(newItemIds);
+										next.delete(item.id);
+										newItemIds = next;
+									}
+								}}
+							>
 									<form
 										method="POST"
 										action="?/checkItem"
@@ -616,13 +650,30 @@
 						Delete
 					</button>
 				</form>
-				<button
-					class="w-full rounded-xl border border-gray-200 py-3 text-sm"
-					onclick={() => (deleteListOpen = false)}
-				>
-					Cancel
-				</button>
-			</div>
+			<button
+				class="w-full rounded-xl border border-gray-200 py-3 text-sm"
+				onclick={() => (deleteListOpen = false)}
+			>
+				Cancel
+			</button>
 		</div>
 	</div>
+</div>
 {/if}
+
+<style>
+	.animate-new-item {
+		animation: new-item-flash 1.5s ease-out;
+	}
+	@keyframes new-item-flash {
+		0% {
+			background-color: rgba(197, 88, 228, 0.28);
+		}
+		60% {
+			background-color: rgba(197, 88, 228, 0.18);
+		}
+		100% {
+			background-color: #ffffff;
+		}
+	}
+</style>

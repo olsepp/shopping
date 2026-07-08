@@ -24,6 +24,9 @@ export default defineConfig({
 			kit: {
 				adapterFallback: '/shopping-list'
 			},
+			devOptions: {
+				enabled: true
+			},
 			workbox: {
 				navigateFallback: '/shopping-list',
 				navigateFallbackDenylist: [/^\/api\//],

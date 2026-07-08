@@ -1,5 +1,6 @@
 <script lang="ts">
 	import type { PageProps } from './$types';
+	import type { ActionData } from './$types';
 	import { enhance } from '$app/forms';
 	import { Plus, ArrowRight, Trash2 } from 'lucide-svelte';
 	import { swipe } from '$lib/swipe.svelte';
@@ -11,8 +12,44 @@
 
 	let swipeOffsets = $state<Record<string, number>>({});
 
+	let seenItemIds = $state<Set<string>>(new Set());
+	let newItemIds = $state<Set<string>>(new Set());
+	let firstLoad = $state(true);
+
+	$effect(() => {
+		const currentIds = new Set(data.items.map((i: { id: string }) => i.id));
+		if (firstLoad) {
+			seenItemIds = new Set(currentIds);
+			firstLoad = false;
+			return;
+		}
+		const fresh = [...currentIds].filter((id) => !seenItemIds.has(id));
+		if (fresh.length) {
+			const nextNew = new Set(newItemIds);
+			const nextSeen = new Set(seenItemIds);
+			for (const id of fresh) {
+				nextNew.add(id);
+				nextSeen.add(id);
+			}
+			newItemIds = nextNew;
+			seenItemIds = nextSeen;
+		}
+	});
+
+	let showAddedModal = $state(false);
+	let addedTimer: ReturnType<typeof setTimeout> | null = null;
+	let duplicateModal = $state<{ itemId: string; name: string } | null>(null);
+
+	type AddResult = { added?: true; alreadyAdded?: true; error?: string };
+
 	function getSwipeOffset(itemId: string) {
 		return swipeOffsets[itemId] ?? 0;
+	}
+
+	function showAdded() {
+		showAddedModal = true;
+		if (addedTimer) clearTimeout(addedTimer);
+		addedTimer = setTimeout(() => (showAddedModal = false), 1800);
 	}
 
 	function swipedRight(itemId: string) {
@@ -69,25 +106,46 @@
 						>
 							<Trash2 class="h-5 w-5" />
 						</div>
-						<div
-							class="relative flex items-center gap-3 px-4 py-3 bg-white"
-							style="transform: translateX({offsetX}px);"
-						>
+					<div
+						class="relative flex items-center gap-3 px-4 py-3 bg-white {newItemIds.has(item.id)
+							? 'animate-new-item'
+							: ''}"
+						style="transform: translateX({offsetX}px);"
+						onanimationend={() => {
+							if (newItemIds.has(item.id)) {
+								const next = new Set(newItemIds);
+								next.delete(item.id);
+								newItemIds = next;
+							}
+						}}
+					>
 							<span class="flex-1 text-text">{item.name}</span>
 							{#if item.quantity && item.quantity !== '1'}
 								<span class="text-sm font-medium text-accent">{item.quantity}x</span>
 							{/if}
 						</div>
 
-						<form
-							hidden
-							id="form-swipe-{item.id}"
-							method="POST"
-							action="?/addToShoppingList"
-							use:enhance
-						>
-							<input type="hidden" name="itemId" value={item.id} />
-						</form>
+					<form
+						hidden
+						id="form-swipe-{item.id}"
+						method="POST"
+						action="?/addToShoppingList"
+						use:enhance={() => {
+							return async ({ result, update }) => {
+								if (result.type === 'success') {
+									const res = (result.data ?? {}) as AddResult;
+									if (res.alreadyAdded) {
+										duplicateModal = { itemId: item.id, name: item.name };
+									} else if (res.added) {
+										showAdded();
+									}
+								}
+								await update({ reset: false, invalidateAll: false });
+							};
+						}}
+					>
+						<input type="hidden" name="itemId" value={item.id} />
+					</form>
 						<form hidden id="form-delete-{item.id}" method="POST" action="?/deleteItem" use:enhance>
 							<input type="hidden" name="itemId" value={item.id} />
 						</form>
@@ -134,3 +192,103 @@
 		</form>
 	</section>
 </div>
+
+{#if showAddedModal}
+	<div class="fixed inset-0 z-50 flex items-center justify-center bg-black/30">
+		<div class="flex flex-col items-center gap-3 rounded-2xl bg-white px-10 py-8 shadow-lg">
+			<svg class="checkmark" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 52 52">
+				<circle class="checkmark-circle" cx="26" cy="26" r="25" fill="none" />
+				<path class="checkmark-check" fill="none" d="M14 27l5.917 4.917L37 16" />
+			</svg>
+			<p class="text-sm font-medium text-text">Added to today's list</p>
+		</div>
+	</div>
+{/if}
+
+{#if duplicateModal}
+	<div class="fixed inset-0 z-50 flex items-center justify-center bg-black/30 px-4">
+		<div class="w-full max-w-sm rounded-2xl bg-white p-6 shadow-lg">
+			<p class="mb-1 text-center text-base font-semibold text-text">Already in today's list</p>
+			<p class="mb-5 text-center text-sm text-muted">
+				"{duplicateModal.name}" is already on today's shopping list. Add another one?
+			</p>
+			<div class="flex flex-col gap-2">
+				<form
+					method="POST"
+					action="?/addToShoppingList"
+					use:enhance={() => {
+						return async ({ result, update }) => {
+							if (result.type === 'success') {
+								const res = (result.data ?? {}) as AddResult;
+								if (res.added) {
+									duplicateModal = null;
+									showAdded();
+								}
+							}
+							await update({ reset: false, invalidateAll: false });
+						};
+					}}
+				>
+					<input type="hidden" name="itemId" value={duplicateModal.itemId} />
+					<input type="hidden" name="forceAdd" value="true" />
+					<button
+						type="submit"
+						class="w-full rounded-xl bg-primary py-3 text-sm font-medium text-white"
+					>
+						Add anyway
+					</button>
+				</form>
+				<button
+					type="button"
+					onclick={() => (duplicateModal = null)}
+					class="w-full rounded-xl border border-gray-200 py-3 text-sm font-medium"
+				>
+					Cancel
+				</button>
+			</div>
+		</div>
+	</div>
+{/if}
+
+<style>
+	.checkmark {
+		width: 56px;
+		height: 56px;
+	}
+	.checkmark-circle {
+		stroke: #22c55e;
+		stroke-width: 2;
+		stroke-dasharray: 166;
+		stroke-dashoffset: 166;
+		animation: checkmark-stroke 0.6s cubic-bezier(0.65, 0, 0.45, 1) forwards;
+	}
+	.checkmark-check {
+		stroke: #22c55e;
+		stroke-width: 3;
+		stroke-linecap: round;
+		stroke-linejoin: round;
+		stroke-dasharray: 48;
+		stroke-dashoffset: 48;
+		animation: checkmark-stroke 0.3s cubic-bezier(0.65, 0, 0.45, 1) 0.5s forwards;
+	}
+	@keyframes checkmark-stroke {
+		to {
+			stroke-dashoffset: 0;
+		}
+	}
+
+	.animate-new-item {
+		animation: new-item-flash 1.5s ease-out;
+	}
+	@keyframes new-item-flash {
+		0% {
+			background-color: rgba(197, 88, 228, 0.28);
+		}
+		60% {
+			background-color: rgba(197, 88, 228, 0.18);
+		}
+		100% {
+			background-color: #ffffff;
+		}
+	}
+</style>
