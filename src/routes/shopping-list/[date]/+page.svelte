@@ -3,11 +3,13 @@
 	import { enhance } from '$app/forms';
 	import { goto } from '$app/navigation';
 	import { format, parseISO } from 'date-fns';
-	import { ArrowLeft, MoreHorizontal, Plus, Check, Trash2, UserPlus } from 'lucide-svelte';
+	import { ArrowLeft, MoreHorizontal, Plus, Check, Trash2, UserPlus, Loader2 } from 'lucide-svelte';
 	import { swipe } from '$lib/swipe.svelte';
+	import { addToast } from '$lib/toast.svelte';
 
 	let { data, form }: PageProps = $props();
 
+	let pendingChecks = $state<Set<string>>(new Set());
 	let newItemName = $state('');
 	let newItemQty = $state('');
 	let deleteListOpen = $state(false);
@@ -105,26 +107,24 @@
 					<h2 class="mb-1 text-xs font-medium uppercase text-muted">{group.name}</h2>
 					<div class="rounded-xl bg-white shadow-sm">
 						{#each group.items as item}
-							{@const isChecked = item.checked}
+							{@const pending = pendingChecks.has(item.id)}
+							{@const isChecked = item.checked !== pending}
 							{@const offsetX = swipeOffsets[item.id] ?? 0}
 							<div
 								use:swipe={{
-									onSwipeLeft: () => {
+
+									items: group.items,
+									offsetX,
+									item,
+									onLeft: () => {
 										const form = document.getElementById(`del-${item.id}`) as HTMLFormElement;
 										form?.requestSubmit();
 									},
-									onStateChange: (ox) => {
-										swipeOffsets = { ...swipeOffsets, [item.id]: ox };
-									}
 								}}
-								class="relative overflow-hidden"
 							>
 								<div
-									class="absolute inset-y-0 right-0 flex items-center justify-center rounded-r-xl bg-red-500 text-white"
-									style="width: {Math.max(0, -offsetX)}px; opacity: {Math.min(
-										1,
-										Math.max(0, -offsetX / 80)
-									)};"
+									class="absolute inset-y-0 right-0 flex items-center justify-center bg-red-500 px-4 text-white"
+									style="margin-right: -80px; width: 80px;"
 								>
 									<Trash2 class="h-5 w-5" />
 								</div>
@@ -132,7 +132,15 @@
 									class="relative flex items-center border-b border-gray-50 bg-white last:border-0"
 									style="transform: translateX({offsetX}px);"
 								>
-									<form method="POST" action="?/checkItem" use:enhance class="flex-1">
+									<form method="POST" action="?/checkItem" use:enhance={() => {
+										pendingChecks.add(item.id);
+										pendingChecks = new Set(pendingChecks);
+										return async ({ update }) => {
+											pendingChecks.delete(item.id);
+											pendingChecks = new Set(pendingChecks);
+											await update({ invalidateAll: false });
+										};
+									}} class="flex-1">
 										<input type="hidden" name="itemId" value={item.id} />
 										<input type="hidden" name="checked" value={String(!isChecked)} />
 										<button
@@ -140,13 +148,18 @@
 											class={`flex w-full items-center gap-3 px-4 py-3 text-left ${
 												isChecked ? 'line-through opacity-70' : ''
 											}`}
+											disabled={pending}
 										>
 											<span
 												class={`flex h-6 w-6 flex-shrink-0 items-center justify-center rounded border-2 ${
-													isChecked ? 'border-primary bg-primary text-white' : 'border-gray-300'
+													isChecked || pending ? 'border-primary bg-primary text-white' : 'border-gray-300'
 												}`}
 											>
-												{#if isChecked}<Check class="h-4 w-4" />{/if}
+												{#if pending}
+													<Loader2 class="h-4 w-4 animate-spin" />
+												{:else if isChecked}
+													<Check class="h-4 w-4" />
+												{/if}
 											</span>
 											<span class="flex-1">
 												{#if item.quantity && item.quantity !== '1'}
@@ -320,6 +333,12 @@
 				action="?/assignList"
 				use:enhance={() => {
 					assignPickerOpen = false;
+					return async ({ result, update }) => {
+						if (result.type === 'success' && result.data?.pushSent) {
+							addToast('Notification sent', 'success');
+						}
+						await update({ invalidateAll: false });
+					};
 				}}
 			>
 				<input type="hidden" name="userId" value="" />
@@ -343,6 +362,12 @@
 					action="?/assignList"
 					use:enhance={() => {
 						assignPickerOpen = false;
+						return async ({ result, update }) => {
+							if (result.type === 'success' && result.data?.pushSent) {
+								addToast('Notification sent', 'success');
+							}
+							await update({ invalidateAll: false });
+						};
 					}}
 				>
 					<input type="hidden" name="userId" value={user.id} />

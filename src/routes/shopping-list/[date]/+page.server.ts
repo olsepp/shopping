@@ -228,14 +228,15 @@ export const actions: Actions = {
 			assignedBy: locals.user!.username
 		});
 
+		let pushSent = false;
 		if (assignedTo && assignedTo !== locals.user!.id) {
-			console.log(`[push] Triggering push from ${locals.user!.username} to user ${assignedTo}`);
-			sendPushToUser(assignedTo, {
+			pushSent = await sendPushToUser(assignedTo, {
 				title: 'Shopping List Assigned',
 				body: `${locals.user!.username} assigned a list to you`,
 				url: `/shopping-list/${params.date}`
-			}).catch((err) => console.error('[push] sendPushToUser error:', err));
+			});
 		}
+		return { pushSent };
 	},
 
 	deleteList: async ({ params }) => {

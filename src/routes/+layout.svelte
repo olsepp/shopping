@@ -19,7 +19,6 @@
 	let navigating = $state(false);
 	let progress = $state(0);
 	let showPushPrompt = $state(false);
-	let pushFailed = $state(false);
 
 	$effect(() => {
 		if (data.user) {
@@ -31,9 +30,7 @@
 					if (state.permission === 'default') {
 						showPushPrompt = true;
 					} else if (state.permission === 'granted') {
-						subscribe().then((ok) => {
-							if (!ok) pushFailed = true;
-						});
+						subscribe();
 					}
 				});
 			}
@@ -174,31 +171,6 @@
 			onclick={() => (showPushPrompt = false)}
 		>
 			Later
-		</button>
-	</div>
-{/if}
-
-{#if pushFailed}
-	<div
-		class="fixed bottom-20 left-4 right-4 z-50 flex items-center gap-3 rounded-xl border-2 border-black bg-red-100 px-4 py-3 shadow-lg"
-	>
-		<p class="flex-1 text-sm text-red-800">
-			Failed to enable notifications.
-		</p>
-		<button
-			class="shrink-0 rounded-lg bg-red-500 px-3 py-1.5 text-sm font-medium text-white"
-			onclick={async () => {
-				pushFailed = false;
-				await subscribe();
-			}}
-		>
-			Retry
-		</button>
-		<button
-			class="shrink-0 text-muted text-sm"
-			onclick={() => (pushFailed = false)}
-		>
-			Dismiss
 		</button>
 	</div>
 {/if}

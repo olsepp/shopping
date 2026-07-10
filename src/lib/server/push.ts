@@ -18,22 +18,17 @@ export function getVapidPublicKey(): string {
 export async function sendPushToUser(
 	userId: number,
 	payload: { title: string; body: string; url: string }
-): Promise<void> {
-	if (!vapidPublicKey || !vapidPrivateKey) return;
+): Promise<boolean> {
+	if (!vapidPublicKey || !vapidPrivateKey) return false;
 
 	const subs = await db
 		.select()
 		.from(pushSubscriptions)
 		.where(eq(pushSubscriptions.user_id, userId));
 
-	if (subs.length === 0) {
-		console.warn(`[push] No subscriptions found for user ${userId}`);
-		return;
-	}
+	if (subs.length === 0) return false;
 
-	console.log(`[push] Sending to ${subs.length} subscription(s) for user ${userId}`);
-
-	await Promise.allSettled(
+	const results = await Promise.allSettled(
 		subs.map(async (sub) => {
 			try {
 				await webpush.sendNotification(
@@ -43,16 +38,15 @@ export async function sendPushToUser(
 					},
 					JSON.stringify(payload)
 				);
-				console.log('[push] Notification sent successfully');
 			} catch (err: any) {
-				console.error('[push] Send failed:', err.statusCode, err.body || err.message);
 				if (err.statusCode === 410 || err.statusCode === 404) {
 					await db
 						.delete(pushSubscriptions)
 						.where(eq(pushSubscriptions.id, sub.id));
-					console.log('[push] Removed expired subscription');
 				}
 			}
 		})
 	);
+
+	return results.some((r) => r.status === 'fulfilled');
 }

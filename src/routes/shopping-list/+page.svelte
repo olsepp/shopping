@@ -19,14 +19,17 @@
 		Plus,
 		Check,
 		Trash2,
-		UserPlus
+		UserPlus,
+		Loader2
 	} from 'lucide-svelte';
 	import { swipe } from '$lib/swipe.svelte';
+	import { addToast } from '$lib/toast.svelte';
 
 	let { data, form }: PageProps = $props();
 
 	// ---- today widget state ----
 	let newItemName = $state('');
+	let pendingChecks = $state<Set<string>>(new Set());
 	let newItemQty = $state('');
 	let deleteListOpen = $state(false);
 	let manualAdd = $state(false);
@@ -205,8 +208,9 @@
 					<h2 class="mb-1 text-xs font-medium uppercase text-muted">{group.name}</h2>
 					<div class="rounded-xl bg-white shadow-sm">
 						{#each group.items as item}
-							{@const isChecked = item.checked}
-							{@const offsetX = swipeOffsets[item.id] ?? 0}
+						{@const pending = pendingChecks.has(item.id)}
+						{@const isChecked = item.checked !== pending}
+						{@const offsetX = swipeOffsets[item.id] ?? 0}
 							<div
 								use:swipe={{
 									onSwipeLeft: () => {
@@ -246,9 +250,15 @@
 									<form
 										method="POST"
 										action="?/checkItem"
-										use:enhance={() =>
-											async ({ update }) =>
-												update({ invalidateAll: false })}
+										use:enhance={() => {
+											pendingChecks.add(item.id);
+											pendingChecks = new Set(pendingChecks);
+											return async ({ update }) => {
+												pendingChecks.delete(item.id);
+												pendingChecks = new Set(pendingChecks);
+												await update({ invalidateAll: false });
+											};
+										}}
 										class="flex-1"
 									>
 										<input type="hidden" name="itemId" value={item.id} />
@@ -258,13 +268,18 @@
 											class={`flex w-full items-center gap-3 px-4 py-3 text-left ${
 												isChecked ? 'line-through opacity-70' : ''
 											}`}
+											disabled={pending}
 										>
 											<span
 												class={`flex h-6 w-6 flex-shrink-0 items-center justify-center rounded border-2 ${
-													isChecked ? 'border-primary bg-primary text-white' : 'border-gray-300'
+													isChecked || pending ? 'border-primary bg-primary text-white' : 'border-gray-300'
 												}`}
 											>
-												{#if isChecked}<Check class="h-4 w-4" />{/if}
+												{#if pending}
+													<Loader2 class="h-4 w-4 animate-spin" />
+												{:else if isChecked}
+													<Check class="h-4 w-4" />
+												{/if}
 											</span>
 											<span class="flex-1">
 												{#if item.quantity && item.quantity !== '1'}
@@ -583,7 +598,12 @@
 				action="?/assignList"
 				use:enhance={() => {
 					assignPickerOpen = false;
-					return async ({ update }) => update({ invalidateAll: false });
+					return async ({ result, update }) => {
+						if (result.type === 'success' && result.data?.pushSent) {
+							addToast('Notification sent', 'success');
+						}
+						await update({ invalidateAll: false });
+					};
 				}}
 			>
 				<input type="hidden" name="userId" value="" />
@@ -607,7 +627,12 @@
 					action="?/assignList"
 					use:enhance={() => {
 						assignPickerOpen = false;
-						return async ({ update }) => update({ invalidateAll: false });
+						return async ({ result, update }) => {
+							if (result.type === 'success' && result.data?.pushSent) {
+								addToast('Notification sent', 'success');
+							}
+							await update({ invalidateAll: false });
+						};
 					}}
 				>
 					<input type="hidden" name="userId" value={user.id} />

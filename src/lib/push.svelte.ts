@@ -1,5 +1,3 @@
-import { addToast } from '$lib/toast.svelte';
-
 let vapidPublicKey = $state<string>('');
 let permission = $state<NotificationPermission>('default');
 let subscribed = $state(false);
@@ -45,14 +43,7 @@ export async function requestPermission(): Promise<NotificationPermission> {
 }
 
 export async function subscribe(): Promise<boolean> {
-	if (!pushSupported()) {
-		addToast('Push notifications not supported in this browser', 'error');
-		return false;
-	}
-	if (!vapidPublicKey) {
-		addToast('Server key not available, try refreshing', 'error');
-		return false;
-	}
+	if (!pushSupported() || !vapidPublicKey) return false;
 
 	let registration: ServiceWorkerRegistration;
 
@@ -60,7 +51,6 @@ export async function subscribe(): Promise<boolean> {
 		try {
 			registration = await navigator.serviceWorker.register('/sw.js', { scope: '/' });
 		} catch {
-			addToast('Could not start service worker, try reinstalling the app from home screen', 'error');
 			return false;
 		}
 	} else {
@@ -73,7 +63,6 @@ export async function subscribe(): Promise<boolean> {
 			]);
 			if (!registration) throw new Error('no registration');
 		} catch {
-			addToast('Service worker stuck, try closing and reopening the app', 'error');
 			return false;
 		}
 	}
@@ -82,7 +71,6 @@ export async function subscribe(): Promise<boolean> {
 	try {
 		subscription = await registration.pushManager.getSubscription();
 	} catch {
-		addToast('Could not check push subscription, try again', 'error');
 		return false;
 	}
 
@@ -91,10 +79,8 @@ export async function subscribe(): Promise<boolean> {
 		try {
 			await sendToServer(subscription);
 		} catch {
-			addToast('Could not save notification settings, check connection', 'error');
 			return false;
 		}
-		addToast('Notifications enabled, you will be notified when a list is assigned to you', 'success');
 		return true;
 	}
 
@@ -109,19 +95,16 @@ export async function subscribe(): Promise<boolean> {
 			)
 		]);
 	} catch {
-		addToast('Could not enable push, make sure app is installed to home screen', 'error');
 		return false;
 	}
 
 	try {
 		await sendToServer(subscription);
 	} catch {
-		addToast('Could not save notification settings, check connection', 'error');
 		return false;
 	}
 
 	subscribed = true;
-	addToast('Notifications enabled, you will be notified when a list is assigned to you', 'success');
 	return true;
 }
 

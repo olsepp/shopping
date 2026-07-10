@@ -32,7 +32,6 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 			.update(pushSubscriptions)
 			.set({ p256dh: keys.p256dh, auth: keys.auth })
 			.where(eq(pushSubscriptions.id, existing[0].id));
-		console.log('[push] Updated existing subscription for user', locals.user.id);
 	} else {
 		await db.insert(pushSubscriptions).values({
 			user_id: locals.user.id,
@@ -40,7 +39,6 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 			p256dh: keys.p256dh,
 			auth: keys.auth
 		});
-		console.log('[push] Saved new subscription for user', locals.user.id);
 	}
 
 	return json({ ok: true });
