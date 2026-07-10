@@ -28,6 +28,7 @@
 		"@tailwindcss/typography": "^0.5.19",
 		"@tailwindcss/vite": "^4.3.0",
 		"@types/node": "^22",
+		"@types/web-push": "^3.6.4",
 		"@vite-pwa/sveltekit": "^1.1.0",
 		"date-fns": "^4.4.0",
 		"drizzle-kit": "^0.31.10",
@@ -45,6 +46,7 @@
 		"bcryptjs": "^3.0.3",
 		"drizzle-orm": "^0.45.2",
 		"jose": "^6.2.3",
-		"postgres": "^3.4.9"
+		"postgres": "^3.4.9",
+		"web-push": "^3.6.7"
 	}
 }

@@ -30,6 +30,7 @@ export default defineConfig({
 			workbox: {
 				navigateFallback: '/shopping-list',
 				navigateFallbackDenylist: [/^\/api\//],
+				importScripts: ['/push-handlers.js'],
 				runtimeCaching: [
 					{
 						urlPattern: /^\/api\/sse/,

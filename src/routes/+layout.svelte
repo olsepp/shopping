@@ -6,14 +6,29 @@
 	import { ShoppingCart, Book, ClipboardPen } from 'lucide-svelte';
 	import { initSSE } from '$lib/sse.svelte';
 	import { toasts } from '$lib/toast.svelte';
+	import {
+		pushSupported,
+		checkPermission,
+		requestPermission,
+		getPushState
+	} from '$lib/push.svelte';
 	import type { LayoutProps } from './$types';
 
 	let { children, data }: LayoutProps = $props();
 	let navigating = $state(false);
 	let progress = $state(0);
+	let showPushPrompt = $state(false);
 
 	$effect(() => {
-		if (data.user) initSSE();
+		if (data.user) {
+			initSSE();
+			getPushState().setVapidKey(data.vapidPublicKey);
+			if (pushSupported()) {
+				checkPermission().then(() => {
+					showPushPrompt = getPushState().permission === 'default';
+				});
+			}
+		}
 	});
 
 	onMount(() => {
@@ -128,6 +143,31 @@
 		</nav>
 	{/if}
 </div>
+
+{#if showPushPrompt}
+	<div
+		class="fixed bottom-20 left-4 right-4 z-50 flex items-center gap-3 rounded-xl border-2 border-black bg-white px-4 py-3 shadow-lg"
+	>
+		<p class="flex-1 text-sm text-text">
+			Get notified when someone assigns you a shopping list.
+		</p>
+		<button
+			class="shrink-0 rounded-lg bg-primary px-3 py-1.5 text-sm font-medium text-white"
+			onclick={async () => {
+				await requestPermission();
+				showPushPrompt = false;
+			}}
+		>
+			Enable
+		</button>
+		<button
+			class="shrink-0 text-muted text-sm"
+			onclick={() => (showPushPrompt = false)}
+		>
+			Later
+		</button>
+	</div>
+{/if}
 
 {#if toasts.length > 0}
 	<div class="fixed bottom-20 left-4 right-4 z-50 flex flex-col gap-2">

@@ -15,6 +15,13 @@
       "when": 1782842964806,
       "tag": "0001_exotic_madripoor",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1783675087773,
+      "tag": "0002_nifty_morg",
+      "breakpoints": true
     }
   ]
 }

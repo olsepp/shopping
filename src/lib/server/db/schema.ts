@@ -58,6 +58,17 @@ export const pending_items = pgTable('pending_items', {
 	created_at: timestamp('created_at', { withTimezone: true }).defaultNow()
 });
 
+export const pushSubscriptions = pgTable('push_subscriptions', {
+	id: uuid('id').primaryKey().defaultRandom(),
+	user_id: integer('user_id')
+		.notNull()
+		.references(() => users.id, { onDelete: 'cascade' }),
+	endpoint: text('endpoint').notNull(),
+	p256dh: text('p256dh').notNull(),
+	auth: text('auth').notNull(),
+	created_at: timestamp('created_at', { withTimezone: true }).defaultNow()
+});
+
 export const shopping_items = pgTable('shopping_items', {
 	id: uuid('id').primaryKey().defaultRandom(),
 	list_id: uuid('list_id')

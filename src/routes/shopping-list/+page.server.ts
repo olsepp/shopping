@@ -2,6 +2,7 @@ import { db } from '$lib/server/db';
 import { shopping_lists, shopping_items, recipes, ingredients, users } from '$lib/server/db/schema';
 import { eq, asc, sql } from 'drizzle-orm';
 import { broadcast } from '$lib/server/sse';
+import { sendPushToUser } from '$lib/server/push';
 import { today } from '$lib/server/date';
 import type { PageServerLoad, Actions } from './$types';
 
@@ -254,6 +255,14 @@ export const actions: Actions = {
 			assignedToUsername,
 			assignedBy: locals.user!.username
 		});
+
+		if (assignedTo && assignedTo !== locals.user!.id) {
+			sendPushToUser(assignedTo, {
+				title: 'Shopping List Assigned',
+				body: `${locals.user!.username} assigned a list to you`,
+				url: `/shopping-list`
+			});
+		}
 	},
 
 	deleteList: async () => {
