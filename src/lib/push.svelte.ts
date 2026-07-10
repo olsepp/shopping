@@ -55,19 +55,27 @@ export async function subscribe(): Promise<boolean> {
 	}
 
 	let registration: ServiceWorkerRegistration;
-	try {
-		registration = await navigator.serviceWorker.getRegistration();
-		if (!registration) {
+
+	if (!navigator.serviceWorker.controller) {
+		try {
+			registration = await navigator.serviceWorker.register('/sw.js', { scope: '/' });
+		} catch {
+			addToast('Could not start service worker, try reinstalling the app from home screen', 'error');
+			return false;
+		}
+	} else {
+		try {
 			registration = await Promise.race([
-				navigator.serviceWorker.ready,
+				navigator.serviceWorker.getRegistration(),
 				new Promise<ServiceWorkerRegistration>((_, reject) =>
-					setTimeout(() => reject(new Error('timeout')), 15000)
+					setTimeout(() => reject(new Error('timeout')), 5000)
 				)
 			]);
+			if (!registration) throw new Error('no registration');
+		} catch {
+			addToast('Service worker stuck, try closing and reopening the app', 'error');
+			return false;
 		}
-	} catch {
-		addToast('Service worker not ready, try closing and reopening the app', 'error');
-		return false;
 	}
 
 	let subscription: PushSubscription | null;
