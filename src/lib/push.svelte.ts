@@ -43,27 +43,42 @@ export async function requestPermission(): Promise<NotificationPermission> {
 }
 
 export async function subscribe(): Promise<boolean> {
-	if (!pushSupported() || !vapidPublicKey) return false;
+	if (!pushSupported()) {
+		console.error('[push] Push API not supported');
+		return false;
+	}
+	if (!vapidPublicKey) {
+		console.error('[push] VAPID public key is empty');
+		return false;
+	}
 
-		try {
+	try {
+		console.log('[push] Getting SW registration...');
 		const registration = await navigator.serviceWorker.ready;
+		console.log('[push] SW ready, checking existing subscription...');
 		let subscription = await registration.pushManager.getSubscription();
 
 		if (subscription) {
+			console.log('[push] Existing subscription found, sending to server...');
 			subscribed = true;
 			await sendToServer(subscription);
+			console.log('[push] Existing subscription sent to server');
 			return true;
 		}
 
+		console.log('[push] No existing subscription, creating new one...');
 		subscription = await registration.pushManager.subscribe({
 			userVisibleOnly: true,
 			applicationServerKey: urlB64ToUint8Array(vapidPublicKey)
 		});
+		console.log('[push] New subscription created:', subscription.endpoint);
 
 		await sendToServer(subscription);
+		console.log('[push] Subscription sent to server');
 		subscribed = true;
 		return true;
-	} catch {
+	} catch (err) {
+		console.error('[push] Subscription failed:', err);
 		return false;
 	}
 }

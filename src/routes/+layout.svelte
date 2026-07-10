@@ -10,6 +10,7 @@
 		pushSupported,
 		checkPermission,
 		requestPermission,
+		subscribe,
 		getPushState
 	} from '$lib/push.svelte';
 	import type { LayoutProps } from './$types';
@@ -25,7 +26,12 @@
 			getPushState().setVapidKey(data.vapidPublicKey);
 			if (pushSupported()) {
 				checkPermission().then(() => {
-					showPushPrompt = getPushState().permission === 'default';
+					const state = getPushState();
+					if (state.permission === 'default') {
+						showPushPrompt = true;
+					} else if (state.permission === 'granted') {
+						subscribe();
+					}
 				});
 			}
 		}

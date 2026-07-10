@@ -26,6 +26,13 @@ export async function sendPushToUser(
 		.from(pushSubscriptions)
 		.where(eq(pushSubscriptions.user_id, userId));
 
+	if (subs.length === 0) {
+		console.warn(`[push] No subscriptions found for user ${userId}`);
+		return;
+	}
+
+	console.log(`[push] Sending to ${subs.length} subscription(s) for user ${userId}`);
+
 	await Promise.allSettled(
 		subs.map(async (sub) => {
 			try {
@@ -36,11 +43,14 @@ export async function sendPushToUser(
 					},
 					JSON.stringify(payload)
 				);
+				console.log('[push] Notification sent successfully');
 			} catch (err: any) {
+				console.error('[push] Send failed:', err.statusCode, err.body || err.message);
 				if (err.statusCode === 410 || err.statusCode === 404) {
 					await db
 						.delete(pushSubscriptions)
 						.where(eq(pushSubscriptions.id, sub.id));
+					console.log('[push] Removed expired subscription');
 				}
 			}
 		})

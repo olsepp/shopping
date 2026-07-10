@@ -257,11 +257,12 @@ export const actions: Actions = {
 		});
 
 		if (assignedTo && assignedTo !== locals.user!.id) {
+			console.log(`[push] Triggering push from ${locals.user!.username} to user ${assignedTo}`);
 			sendPushToUser(assignedTo, {
 				title: 'Shopping List Assigned',
 				body: `${locals.user!.username} assigned a list to you`,
 				url: `/shopping-list`
-			});
+			}).catch((err) => console.error('[push] sendPushToUser error:', err));
 		}
 	},
 
