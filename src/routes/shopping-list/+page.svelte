@@ -29,7 +29,7 @@
 
 	// ---- today widget state ----
 	let newItemName = $state('');
-	let pendingChecks = $state<Set<string>>(new Set());
+	let pendingChecks = $state<Map<string, boolean>>(new Map());
 	let newItemQty = $state('');
 	let deleteListOpen = $state(false);
 	let manualAdd = $state(false);
@@ -209,7 +209,7 @@
 					<div class="rounded-xl bg-white shadow-sm">
 						{#each group.items as item}
 						{@const pending = pendingChecks.has(item.id)}
-						{@const isChecked = item.checked !== pending}
+						{@const isChecked = pending ? pendingChecks.get(item.id)! : item.checked}
 						{@const offsetX = swipeOffsets[item.id] ?? 0}
 							<div
 								use:swipe={{
@@ -251,12 +251,16 @@
 										method="POST"
 										action="?/checkItem"
 										use:enhance={() => {
-											pendingChecks.add(item.id);
-											pendingChecks = new Set(pendingChecks);
+											const target = !item.checked;
+											pendingChecks.set(item.id, target);
+											pendingChecks = new Map(pendingChecks);
 											return async ({ update }) => {
-												pendingChecks.delete(item.id);
-												pendingChecks = new Set(pendingChecks);
-												await update({ invalidateAll: false });
+												try {
+													await update({ invalidateAll: false });
+												} finally {
+													pendingChecks.delete(item.id);
+													pendingChecks = new Map(pendingChecks);
+												}
 											};
 										}}
 										class="flex-1"
@@ -270,16 +274,25 @@
 											}`}
 											disabled={pending}
 										>
-											<span
-												class={`flex h-6 w-6 flex-shrink-0 items-center justify-center rounded border-2 ${
-													isChecked || pending ? 'border-primary bg-primary text-white' : 'border-gray-300'
-												}`}
-											>
-												{#if pending}
-													<Loader2 class="h-4 w-4 animate-spin" />
-												{:else if isChecked}
-													<Check class="h-4 w-4" />
-												{/if}
+											<span class="relative h-6 w-6 flex-shrink-0">
+												<span
+													class="absolute inset-0 flex items-center justify-center rounded border-2 transition-all duration-200 {pending
+														? 'opacity-0 scale-50'
+														: 'opacity-100 scale-100'} {isChecked
+														? 'border-primary bg-primary text-white'
+														: 'border-gray-300'}"
+												>
+													{#if isChecked}
+														<Check class="h-4 w-4" />
+													{/if}
+												</span>
+												<span
+													class="absolute inset-0 flex items-center justify-center transition-all duration-200 {pending
+														? 'opacity-100 scale-100'
+														: 'opacity-0 scale-50'}"
+												>
+													<Loader2 class="h-5 w-5 animate-spin text-primary" />
+												</span>
 											</span>
 											<span class="flex-1">
 												{#if item.quantity && item.quantity !== '1'}
