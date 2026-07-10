@@ -1,3 +1,5 @@
+import { addToast } from '$lib/toast.svelte';
+
 let vapidPublicKey = $state<string>('');
 let permission = $state<NotificationPermission>('default');
 let subscribed = $state(false);
@@ -54,9 +56,23 @@ export async function subscribe(): Promise<boolean> {
 
 	try {
 		console.log('[push] Getting SW registration...');
-		const registration = await navigator.serviceWorker.ready;
+		let registration = await navigator.serviceWorker.getRegistration();
+		if (!registration) {
+			console.log('[push] No registration yet, waiting for ready...');
+			registration = await Promise.race([
+				navigator.serviceWorker.ready,
+				new Promise<ServiceWorkerRegistration>((_, reject) =>
+					setTimeout(() => reject(new Error('SW ready timed out')), 15000)
+				)
+			]);
+		}
 		console.log('[push] SW ready, checking existing subscription...');
-		let subscription = await registration.pushManager.getSubscription();
+		let subscription = await Promise.race([
+			registration.pushManager.getSubscription(),
+			new Promise<PushSubscription | null>((_, reject) =>
+				setTimeout(() => reject(new Error('getSubscription timed out')), 10000)
+			)
+		]);
 
 		if (subscription) {
 			console.log('[push] Existing subscription found, sending to server...');
@@ -67,18 +83,25 @@ export async function subscribe(): Promise<boolean> {
 		}
 
 		console.log('[push] No existing subscription, creating new one...');
-		subscription = await registration.pushManager.subscribe({
-			userVisibleOnly: true,
-			applicationServerKey: urlB64ToUint8Array(vapidPublicKey)
-		});
+		subscription = await Promise.race([
+			registration.pushManager.subscribe({
+				userVisibleOnly: true,
+				applicationServerKey: urlB64ToUint8Array(vapidPublicKey)
+			}),
+			new Promise<PushSubscription>((_, reject) =>
+				setTimeout(() => reject(new Error('pushManager.subscribe timed out')), 15000)
+			)
+		]);
 		console.log('[push] New subscription created:', subscription.endpoint);
 
 		await sendToServer(subscription);
 		console.log('[push] Subscription sent to server');
 		subscribed = true;
+		addToast('Notifications enabled, you will be notified when a list is assigned to you', 'success');
 		return true;
 	} catch (err) {
 		console.error('[push] Subscription failed:', err);
+		addToast('Failed to enable notifications, please try again', 'error');
 		return false;
 	}
 }
