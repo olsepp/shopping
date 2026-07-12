@@ -112,19 +112,22 @@
 							{@const offsetX = swipeOffsets[item.id] ?? 0}
 							<div
 								use:swipe={{
-
-									items: group.items,
-									offsetX,
-									item,
-									onLeft: () => {
+									onSwipeLeft: () => {
 										const form = document.getElementById(`del-${item.id}`) as HTMLFormElement;
 										form?.requestSubmit();
 									},
+									onStateChange: (ox) => {
+										swipeOffsets = { ...swipeOffsets, [item.id]: ox };
+									}
 								}}
+								class="relative overflow-hidden"
 							>
 								<div
-									class="absolute inset-y-0 right-0 flex items-center justify-center bg-red-500 px-4 text-white"
-									style="margin-right: -80px; width: 80px;"
+									class="absolute inset-y-0 right-0 flex items-center justify-center rounded-r-xl bg-red-500 text-white"
+									style="width: {Math.max(0, -offsetX)}px; opacity: {Math.min(
+										1,
+										Math.max(0, -offsetX / 80)
+									)};"
 								>
 									<Trash2 class="h-5 w-5" />
 								</div>
@@ -136,13 +139,13 @@
 										const target = !item.checked;
 										pendingChecks.set(item.id, target);
 										pendingChecks = new Map(pendingChecks);
-										return async ({ update }) => {
-											try {
-												await update({ invalidateAll: false });
-											} finally {
-												pendingChecks.delete(item.id);
-												pendingChecks = new Map(pendingChecks);
+										return async ({ update, result }) => {
+											if (result.type === 'success' && typeof result.data?.checked === 'boolean') {
+												item.checked = result.data.checked;
 											}
+											await update({ invalidateAll: false });
+											pendingChecks.delete(item.id);
+											pendingChecks = new Map(pendingChecks);
 										};
 									}} class="flex-1">
 										<input type="hidden" name="itemId" value={item.id} />
@@ -182,7 +185,11 @@
 											</span>
 										</button>
 									</form>
-									<form hidden method="POST" action="?/deleteItem" use:enhance id="del-{item.id}">
+									<form hidden method="POST" action="?/deleteItem"
+										use:enhance={() =>
+											async ({ update }) =>
+												update({ invalidateAll: false })}
+										id="del-{item.id}">
 										<input type="hidden" name="itemId" value={item.id} />
 									</form>
 								</div>
@@ -201,6 +208,7 @@
 			use:enhance={() => {
 				newItemName = '';
 				newItemQty = '';
+				return async ({ update }) => update({ invalidateAll: false });
 			}}
 			class="mt-3 px-4"
 		>
@@ -264,6 +272,7 @@
 					action="?/addRecipe"
 					use:enhance={() => {
 						recipePickerOpen = false;
+						return async ({ update }) => update({ invalidateAll: false });
 					}}
 				>
 					<input type="hidden" name="recipeId" value={recipe.id} />
@@ -297,7 +306,11 @@
 				{dupCount} of {totalCount} items from this recipe are already in the list.
 			</p>
 			<div class="flex flex-col gap-2">
-				<form method="POST" action="?/addRecipe" use:enhance>
+				<form method="POST" action="?/addRecipe"
+					use:enhance={() =>
+						async ({ update }) =>
+							update({ invalidateAll: false })}
+				>
 					<input type="hidden" name="recipeId" value={rid} />
 					<input type="hidden" name="mode" value="add_all" />
 					<button
@@ -307,7 +320,11 @@
 						Add anyway
 					</button>
 				</form>
-				<form method="POST" action="?/addRecipe" use:enhance>
+				<form method="POST" action="?/addRecipe"
+					use:enhance={() =>
+						async ({ update }) =>
+							update({ invalidateAll: false })}
+				>
 					<input type="hidden" name="recipeId" value={rid} />
 					<input type="hidden" name="mode" value="skip_duplicates" />
 					<button
@@ -413,6 +430,7 @@
 					action="?/deleteList"
 					use:enhance={() => {
 						deleteListOpen = false;
+						return async ({ update }) => update({ invalidateAll: false });
 					}}
 				>
 					<button

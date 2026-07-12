@@ -56,6 +56,7 @@ export function swipe(
 
 	function onTouchStart(e: TouchEvent) {
 		if (e.touches.length !== 1) return;
+		e.preventDefault();
 		begin(e.touches[0].clientX, e.touches[0].clientY);
 	}
 

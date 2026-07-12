@@ -93,6 +93,7 @@ export const actions: Actions = {
 		await db.update(shopping_items).set({ checked }).where(eq(shopping_items.id, itemId));
 
 		broadcast({ type: 'item_checked', listDate: params.date, itemId, checked });
+		return { checked };
 	},
 
 	addItem: async ({ request, params }) => {

@@ -254,13 +254,13 @@
 											const target = !item.checked;
 											pendingChecks.set(item.id, target);
 											pendingChecks = new Map(pendingChecks);
-											return async ({ update }) => {
-												try {
-													await update({ invalidateAll: false });
-												} finally {
-													pendingChecks.delete(item.id);
-													pendingChecks = new Map(pendingChecks);
+											return async ({ update, result }) => {
+												if (result.type === 'success' && typeof result.data?.checked === 'boolean') {
+													item.checked = result.data.checked;
 												}
+												await update({ invalidateAll: false });
+												pendingChecks.delete(item.id);
+												pendingChecks = new Map(pendingChecks);
 											};
 										}}
 										class="flex-1"
