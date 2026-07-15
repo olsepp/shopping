@@ -11,6 +11,7 @@ export function swipe(
 	let startY = 0;
 	let swiping = false;
 	let offsetX = 0;
+	let snapTimer: ReturnType<typeof setTimeout> | null = null;
 	const threshold = handlers.threshold ?? 80;
 
 	function begin(x: number, y: number) {
@@ -18,6 +19,11 @@ export function swipe(
 		startY = y;
 		swiping = true;
 		offsetX = 0;
+		if (snapTimer) {
+			clearTimeout(snapTimer);
+			snapTimer = null;
+		}
+		node.style.transition = 'none';
 		handlers.onStateChange?.(0);
 	}
 
@@ -29,12 +35,22 @@ export function swipe(
 		if (Math.abs(dy) > Math.abs(dx) && Math.abs(dy) > 10) {
 			swiping = false;
 			offsetX = 0;
-			handlers.onStateChange?.(0);
+			snapBack();
 			return;
 		}
 
 		offsetX = dx;
 		handlers.onStateChange?.(dx);
+	}
+
+	function snapBack() {
+		node.style.transition = 'transform 0.25s cubic-bezier(0.25, 0.1, 0.25, 1)';
+		offsetX = 0;
+		handlers.onStateChange?.(0);
+		snapTimer = setTimeout(() => {
+			node.style.transition = 'none';
+			snapTimer = null;
+		}, 260);
 	}
 
 	function end() {
@@ -50,8 +66,7 @@ export function swipe(
 		} else if (offsetX < -threshold) {
 			handlers.onSwipeLeft?.();
 		}
-		offsetX = 0;
-		handlers.onStateChange?.(0);
+		snapBack();
 	}
 
 	function onTouchStart(e: TouchEvent) {

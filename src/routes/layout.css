@@ -12,6 +12,18 @@
 	--color-accent-light: #e8f0eb;
 	--color-muted: #747474;
 	--color-surface: #ffffff;
+	--ease-ios: cubic-bezier(0.25, 0.1, 0.25, 1);
+}
+
+html,
+body {
+	overscroll-behavior: none;
+	touch-action: manipulation;
+	-webkit-tap-highlight-color: transparent;
+}
+
+.overflow-y-auto {
+	-webkit-overflow-scrolling: touch;
 }
 
 @utility safe-top {

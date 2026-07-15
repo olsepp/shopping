@@ -42,7 +42,7 @@ export default defineConfig({
 				name: 'Meal Planner',
 				short_name: 'Planner',
 				description: 'Shared meal planner and shopping lists',
-				theme_color: '#E07A5F',
+				theme_color: '#ffe3fe',
 				background_color: '#ffcffd',
 				display: 'standalone',
 				scope: '/',

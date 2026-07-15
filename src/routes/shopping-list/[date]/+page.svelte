@@ -6,6 +6,8 @@
 	import { ArrowLeft, MoreHorizontal, Plus, Check, Trash2, UserPlus, Loader2 } from 'lucide-svelte';
 	import { swipe } from '$lib/swipe.svelte';
 	import { addToast } from '$lib/toast.svelte';
+	import { fly, fade } from 'svelte/transition';
+	import { cubicOut } from 'svelte/easing';
 
 	let { data, form }: PageProps = $props();
 
@@ -258,10 +260,12 @@
 		class="fixed inset-0 z-40 bg-black/30"
 		onclick={() => (recipePickerOpen = false)}
 		aria-label="Close recipe picker"
+		transition:fade={{ duration: 200 }}
 	></button>
 	<div
 		class="fixed bottom-0 left-0 right-0 z-50 rounded-t-2xl bg-white p-4"
 		style="padding-bottom: env(safe-area-inset-bottom)"
+		transition:fly={{ y: 200, duration: 250, easing: cubicOut }}
 	>
 		<div class="mb-4 h-1 w-12 self-center rounded-full bg-gray-300 mx-auto"></div>
 		<h2 class="mb-3 text-lg font-semibold">Add Recipe</h2>
@@ -350,10 +354,12 @@
 		class="fixed inset-0 z-40 bg-black/30"
 		onclick={() => (assignPickerOpen = false)}
 		aria-label="Close assign picker"
+		transition:fade={{ duration: 200 }}
 	></button>
 	<div
 		class="fixed bottom-0 left-0 right-0 z-50 rounded-t-2xl bg-white p-4"
 		style="padding-bottom: env(safe-area-inset-bottom)"
+		transition:fly={{ y: 200, duration: 250, easing: cubicOut }}
 	>
 		<div class="mb-4 h-1 w-12 self-center rounded-full bg-gray-300 mx-auto"></div>
 		<h2 class="mb-3 text-lg font-semibold">Assign list</h2>

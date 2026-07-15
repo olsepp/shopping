@@ -87,13 +87,13 @@
 <svelte:head>
 	<meta name="mobile-web-app-capable" content="yes" />
 	<meta name="apple-mobile-web-app-capable" content="yes" />
-	<meta name="apple-mobile-web-app-status-bar-style" content="default" />
+	<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
 	<meta name="apple-mobile-web-app-title" content="Meal Planner" />
 </svelte:head>
 
 {#if navigating}
 	<div
-		class="fixed top-0 left-0 right-0 z-50 h-[3px] bg-amber-400 transition-all duration-150 ease-out"
+		class="fixed top-0 left-0 right-0 z-50 h-[3px] bg-amber-400 ease-[var(--ease-ios)]"
 		style="width: {progress * 100}%"
 	></div>
 {/if}
@@ -103,8 +103,8 @@
 
 	{#if $page.url.pathname !== '/login' && data.user}
 		<nav
-			class="fixed bottom-0 left-0 right-0 z-40 flex bg-white"
-			style="padding-bottom: env(safe-area-inset-bottom)"
+			class="fixed bottom-0 left-0 right-0 z-40 flex"
+			style="padding-bottom: env(safe-area-inset-bottom); background-color: rgba(255,255,255,0.65)"
 		>
 			<svg
 				class="absolute bottom-full left-0 right-0 w-full h-6"
@@ -114,14 +114,14 @@
 			>
 				<path
 					d="M0,26 C3,4 16,-2 25,15 C34,0 50,-3 60,13 C70,0 85,-4 95,14 C105,0 120,-3 130,15 C140,0 155,-4 165,13 C175,0 190,-3 200,12 C210,0 225,-4 235,14 C245,0 260,-3 270,15 C280,0 295,-4 305,13 C315,0 330,-3 340,12 C350,0 365,-4 375,26 L375,30 L0,30 Z"
-					fill="white"
-					stroke="black"
+					fill="rgba(255,255,255,0.65)"
+					stroke="rgba(0,0,0,0.12)"
 					stroke-width="2"
 				/>
 			</svg>
 			<a
 				href="/shopping-list"
-				class={`flex flex-1 flex-col items-center gap-0.5 py-2 text-xs ${
+				class={`flex flex-1 flex-col items-center gap-0.5 bg-transparent py-2 text-xs active:bg-white/40 ${
 					$page.url.pathname.startsWith('/shopping-list') ? 'text-primary' : 'text-muted'
 				}`}
 			>
@@ -130,7 +130,7 @@
 			</a>
 			<a
 				href="/backlog"
-				class={`flex flex-1 flex-col items-center gap-0.5 py-2 text-xs ${
+				class={`flex flex-1 flex-col items-center gap-0.5 bg-transparent py-2 text-xs active:bg-white/40 ${
 					$page.url.pathname.startsWith('/backlog') ? 'text-primary' : 'text-muted'
 				}`}
 			>
@@ -139,7 +139,7 @@
 			</a>
 			<a
 				href="/recipes"
-				class={`flex flex-1 flex-col items-center gap-0.5 py-2 text-xs ${
+				class={`flex flex-1 flex-col items-center gap-0.5 bg-transparent py-2 text-xs active:bg-white/40 ${
 					$page.url.pathname.startsWith('/recipes') ? 'text-primary' : 'text-muted'
 				}`}
 			>
