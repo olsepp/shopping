@@ -3,6 +3,7 @@
 	import { onNavigate, goto } from '$app/navigation';
 	import { onMount } from 'svelte';
 	import { page } from '$app/stores';
+	import { navigating } from '$app/state';
 	import { ShoppingCart, Book, ClipboardPen } from 'lucide-svelte';
 	import { initSSE } from '$lib/sse.svelte';
 	import { toasts } from '$lib/toast.svelte';
@@ -16,9 +17,36 @@
 	import type { LayoutProps } from './$types';
 
 	let { children, data }: LayoutProps = $props();
-	let navigating = $state(false);
+	let progressVisible = $state(false);
 	let progress = $state(0);
 	let showPushPrompt = $state(false);
+
+	// `navigating.to` is set as soon as a navigation starts (before load runs),
+	// unlike onNavigate which only fires once the new page's data is ready.
+	let isNavigating = $derived(
+		!!navigating.to && navigating.to.url.pathname !== navigating.from?.url.pathname
+	);
+
+	$effect(() => {
+		if (!isNavigating) return;
+
+		progressVisible = true;
+		progress = 0.1;
+		const interval = setInterval(() => {
+			progress += (0.9 - progress) * 0.1;
+		}, 100);
+
+		return () => {
+			clearInterval(interval);
+			progress = 1;
+			setTimeout(() => {
+				if (!isNavigating) {
+					progressVisible = false;
+					progress = 0;
+				}
+			}, 250);
+		};
+	});
 
 	$effect(() => {
 		if (data.user) {
@@ -57,30 +85,15 @@
 	});
 
 	onNavigate((nav) => {
+		if (!document.startViewTransition) return;
 		if (!nav.to || nav.to.url.pathname === nav.from?.url.pathname) return;
-		navigating = true;
-		progress = 0;
 
-		const interval = setInterval(() => {
-			progress += (0.95 - progress) * 0.3;
-			if (progress > 0.9) progress = 0.95;
-		}, 80);
-
-		const done = () => {
-			clearInterval(interval);
-			progress = 1;
-			setTimeout(() => {
-				navigating = false;
-				progress = 0;
-			}, 200);
-		};
-
-		if (document.startViewTransition) {
-			const vt = document.startViewTransition(() => nav.complete);
-			vt.finished.then(done).catch(done);
-		} else {
-			nav.complete.then(done).catch(done);
-		}
+		return new Promise((resolve) => {
+			document.startViewTransition(async () => {
+				resolve();
+				await nav.complete;
+			});
+		});
 	});
 </script>
 
@@ -91,9 +104,9 @@
 	<meta name="apple-mobile-web-app-title" content="Meal Planner" />
 </svelte:head>
 
-{#if navigating}
+{#if progressVisible}
 	<div
-		class="fixed top-0 left-0 right-0 z-50 h-[3px] bg-amber-400 ease-[var(--ease-ios)]"
+		class="fixed top-0 left-0 z-50 h-[3px] bg-amber-400 transition-[width] duration-200 ease-[var(--ease-ios)]"
 		style="width: {progress * 100}%"
 	></div>
 {/if}

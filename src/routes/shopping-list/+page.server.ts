@@ -33,13 +33,20 @@ async function getOrCreateList(date: string) {
 export const load: PageServerLoad = async ({ depends }) => {
 	depends('shopping-list');
 
-	const [todayList, allRecipes, allUsers, lists] = await Promise.all([
+	const [todayList, todayItems, allRecipes, allUsers, lists] = await Promise.all([
 		db
 			.select()
 			.from(shopping_lists)
 			.where(eq(shopping_lists.date, today()))
 			.limit(1)
 			.then((r) => r[0] ?? null),
+		db
+			.select({ item: shopping_items })
+			.from(shopping_items)
+			.innerJoin(shopping_lists, eq(shopping_items.list_id, shopping_lists.id))
+			.where(eq(shopping_lists.date, today()))
+			.orderBy(asc(shopping_items.position))
+			.then((r) => r.map((row) => row.item)),
 		db
 			.select({
 				id: recipes.id,
@@ -70,23 +77,7 @@ export const load: PageServerLoad = async ({ depends }) => {
 			.orderBy(shopping_lists.date)
 	]);
 
-	const [todayItems, assignedToUser] = await Promise.all([
-		todayList
-			? db
-					.select()
-					.from(shopping_items)
-					.where(eq(shopping_items.list_id, todayList.id))
-					.orderBy(asc(shopping_items.position))
-			: Promise.resolve([] as (typeof shopping_items.$inferSelect)[]),
-		todayList?.assigned_to
-			? db
-					.select({ id: users.id, username: users.username })
-					.from(users)
-					.where(eq(users.id, todayList.assigned_to))
-					.limit(1)
-					.then((r) => r[0] ?? null)
-			: Promise.resolve(null as { id: number; username: string } | null)
-	]);
+	const assignedToUser = allUsers.find((u) => u.id === todayList?.assigned_to) ?? null;
 
 	return {
 		todayList,
