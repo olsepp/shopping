@@ -1,3 +1,14 @@
+import type { SubmitFunction } from '@sveltejs/kit';
+import { addToast } from '$lib/toast.svelte';
+
+export interface RecipeOption {
+	id: string;
+	name: string;
+	ingredients: { id: string; name: string; quantity: string | null }[];
+}
+
+export type AddRecipeMode = 'check_duplicates' | 'add_all' | 'skip_duplicates';
+
 export interface ShoppingItem {
 	id: string;
 	list_id: string;
@@ -47,21 +58,67 @@ export class OptimisticItems {
 		return [...server, ...this.#entries.filter((e) => !ids.has(e.id))];
 	});
 
-	add(name: string, quantity: string): string {
-		const server = this.#serverItems();
+	add(fields: {
+		name: string;
+		quantity: string | null;
+		source_recipe_id?: string;
+		source_recipe_name?: string;
+	}): string {
 		const id = createId();
 		this.#entries.push({
 			id,
 			list_id: '',
-			name,
-			quantity: quantity || '1',
+			name: fields.name,
+			quantity: fields.quantity || '1',
 			checked: false,
-			source_recipe_id: null,
-			source_recipe_name: null,
-			position: Math.max(-1, ...server.map((i) => i.position)) + 1,
+			source_recipe_id: fields.source_recipe_id ?? null,
+			source_recipe_name: fields.source_recipe_name ?? null,
+			position: Math.max(-1, ...this.all.map((i) => i.position)) + 1,
 			pending: true
 		});
 		return id;
+	}
+
+	/**
+	 * `use:enhance` handler for the addRecipe action. Mirrors the server's duplicate
+	 * check: when the server would ask about duplicates, nothing is added up front and
+	 * the server's prompt takes over. Item ids are sent as `itemIds` (ingredient id ->
+	 * item id) so the server rows match the optimistic ones.
+	 */
+	addRecipe(recipe: RecipeOption | undefined, mode: AddRecipeMode): SubmitFunction {
+		return ({ formData }) => {
+			const ids: Record<string, string> = {};
+			if (recipe) {
+				const existing = new Set(this.all.map((i) => i.name.toLowerCase()));
+				const isDuplicate = (ing: { name: string }) => existing.has(ing.name.toLowerCase());
+				let toAdd = recipe.ingredients;
+				if (mode === 'skip_duplicates') toAdd = toAdd.filter((ing) => !isDuplicate(ing));
+				if (mode === 'check_duplicates' && toAdd.some(isDuplicate)) toAdd = [];
+				for (const ing of toAdd) {
+					ids[ing.id] = this.add({
+						name: ing.name,
+						quantity: ing.quantity,
+						source_recipe_id: recipe.id,
+						source_recipe_name: recipe.name
+					});
+				}
+			}
+			formData.set('itemIds', JSON.stringify(ids));
+
+			return async ({ result, update }) => {
+				const added = Object.values(ids);
+				const data = result.type === 'success' ? result.data : undefined;
+				if (result.type === 'success' && !data?.error && !data?.pendingRecipeId) {
+					added.forEach((id) => this.confirm(id));
+				} else {
+					added.forEach((id) => this.remove(id));
+					if (result.type !== 'success' || data?.error) {
+						addToast(String(data?.error || 'Could not add recipe'), 'error');
+					}
+				}
+				await update({ invalidateAll: false });
+			};
+		};
 	}
 
 	/** The server accepted the item; it can be checked/deleted before the reload arrives. */

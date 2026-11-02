@@ -53,7 +53,11 @@ export const load: PageServerLoad = async ({ depends }) => {
 			.select({
 				id: recipes.id,
 				name: recipes.name,
-				ingredientCount: sql<number>`count(${ingredients.id})`.mapWith(Number)
+				ingredientCount: sql<number>`count(${ingredients.id})`.mapWith(Number),
+				// Lets the client show a recipe's items before the addRecipe action returns.
+				ingredients: sql<
+					{ id: string; name: string; quantity: string | null }[]
+				>`coalesce(json_agg(json_build_object('id', ${ingredients.id}, 'name', ${ingredients.name}, 'quantity', ${ingredients.quantity}) order by ${ingredients.position}) filter (where ${ingredients.id} is not null), '[]')`
 			})
 			.from(recipes)
 			.leftJoin(ingredients, eq(ingredients.recipe_id, recipes.id))
@@ -156,6 +160,13 @@ export const actions: Actions = {
 		const data = await request.formData();
 		const recipeId = data.get('recipeId')?.toString() || '';
 		const mode = data.get('mode')?.toString() || 'add_all';
+		// Ingredient id -> client-generated item id, so the client can show the items right away.
+		let itemIds: Record<string, unknown> = {};
+		try {
+			itemIds = JSON.parse(data.get('itemIds')?.toString() || '{}') ?? {};
+		} catch {
+			itemIds = {};
+		}
 
 		if (!recipeId) return { error: 'Recipe ID is required' };
 
@@ -212,6 +223,7 @@ export const actions: Actions = {
 		let pos = (maxPos?.max ?? -1) + 1;
 		await db.insert(shopping_items).values(
 			toInsert.map((ing) => ({
+				id: UUID_RE.test(String(itemIds[ing.id] ?? '')) ? String(itemIds[ing.id]) : undefined,
 				list_id: list.id,
 				name: ing.name,
 				quantity: ing.quantity,

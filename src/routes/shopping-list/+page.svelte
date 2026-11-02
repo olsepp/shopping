@@ -335,7 +335,7 @@
 			method="POST"
 			action="?/addItem"
 			use:enhance={({ formData }) => {
-				const id = optimistic.add(newItemName.trim(), newItemQty.trim());
+				const id = optimistic.add({ name: newItemName.trim(), quantity: newItemQty.trim() });
 				formData.set('id', id);
 				newItemName = '';
 				newItemQty = '';
@@ -534,9 +534,9 @@
 				<form
 					method="POST"
 					action="?/addRecipe"
-					use:enhance={() => {
+					use:enhance={(input) => {
 						recipePickerOpen = false;
-						return async ({ update }) => update({ invalidateAll: false });
+						return optimistic.addRecipe(recipe, 'check_duplicates')(input);
 					}}
 				>
 					<input type="hidden" name="recipeId" value={recipe.id} />
@@ -573,9 +573,10 @@
 				<form
 					method="POST"
 					action="?/addRecipe"
-					use:enhance={() =>
-						async ({ update }) =>
-							update({ invalidateAll: false })}
+					use:enhance={optimistic.addRecipe(
+						data.allRecipes.find((r) => r.id === rid),
+						'add_all'
+					)}
 				>
 					<input type="hidden" name="recipeId" value={rid} />
 					<input type="hidden" name="mode" value="add_all" />
@@ -589,9 +590,10 @@
 				<form
 					method="POST"
 					action="?/addRecipe"
-					use:enhance={() =>
-						async ({ update }) =>
-							update({ invalidateAll: false })}
+					use:enhance={optimistic.addRecipe(
+						data.allRecipes.find((r) => r.id === rid),
+						'skip_duplicates'
+					)}
 				>
 					<input type="hidden" name="recipeId" value={rid} />
 					<input type="hidden" name="mode" value="skip_duplicates" />
