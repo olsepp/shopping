@@ -24,6 +24,7 @@
 	} from 'lucide-svelte';
 	import { swipe } from '$lib/swipe.svelte';
 	import { addToast } from '$lib/toast.svelte';
+	import { OptimisticItems } from '$lib/optimistic-items.svelte';
 	import { fly, fade } from 'svelte/transition';
 	import { cubicOut } from 'svelte/easing';
 
@@ -45,9 +46,9 @@
 
 	let todayDate = $derived(parseISO(data.today));
 	let humanDate = $derived(format(todayDate, 'EEEE, d MMMM'));
-	let allChecked = $derived(
-		data.todayItems.length > 0 && data.todayItems.every((i: { checked: boolean }) => i.checked)
-	);
+	const optimistic = new OptimisticItems(() => data.todayItems);
+	let todayItems = $derived(optimistic.all);
+	let allChecked = $derived(todayItems.length > 0 && todayItems.every((i) => i.checked));
 	let showAllDone = $state(false);
 	let allDoneTimer: ReturnType<typeof setTimeout> | null = null;
 	let swipeOffsets = $state<Record<string, number>>({});
@@ -56,7 +57,9 @@
 	let firstLoad = $state(true);
 
 	$effect(() => {
-		const currentIds = new Set(data.todayItems.map((i: { id: string }) => i.id));
+		// Includes optimistic items, so an added item animates once when it appears
+		// and not again when the server copy with the same id replaces it.
+		const currentIds = new Set(todayItems.map((i) => i.id));
 		if (firstLoad) {
 			seenItemIds = new Set(currentIds);
 			firstLoad = false;
@@ -90,8 +93,8 @@
 	});
 
 	let todayGroups = $derived.by(() => {
-		const map = new Map<string, { name: string; items: typeof data.todayItems }>();
-		for (const item of data.todayItems) {
+		const map = new Map<string, { name: string; items: typeof todayItems }>();
+		for (const item of todayItems) {
 			const key = item.source_recipe_name || 'Other';
 			if (!map.has(key)) map.set(key, { name: key, items: [] });
 			map.get(key)!.items.push(item);
@@ -183,7 +186,7 @@
 		</div>
 	{/if}
 
-	{#if !data.todayList || (data.todayItems.length === 0 && !manualAdd)}
+	{#if todayItems.length === 0 && (!data.todayList || !manualAdd)}
 		<div class="flex flex-col items-center justify-center px-4 py-8">
 			{#if !manualAdd}
 				<p class="mb-6 text-muted">No shopping list for today yet</p>
@@ -213,9 +216,11 @@
 						{@const pending = pendingChecks.has(item.id)}
 						{@const isChecked = pending ? pendingChecks.get(item.id)! : item.checked}
 						{@const offsetX = swipeOffsets[item.id] ?? 0}
+						{@const adding = optimistic.isPending(item.id)}
 							<div
 								use:swipe={{
 									onSwipeLeft: () => {
+										if (optimistic.isPending(item.id)) return;
 										const form = document.getElementById(`del-${item.id}`) as HTMLFormElement;
 										form?.requestSubmit();
 									},
@@ -271,10 +276,10 @@
 										<input type="hidden" name="checked" value={String(!isChecked)} />
 										<button
 											type="submit"
-											class={`flex w-full items-center gap-3 px-4 py-3 text-left ${
+											class={`flex w-full items-center gap-3 px-4 py-3 text-left transition-opacity ${
 												isChecked ? 'line-through opacity-70' : ''
-											}`}
-											disabled={pending}
+											} ${adding ? 'opacity-50' : ''}`}
+											disabled={pending || adding}
 										>
 											<span class="relative h-6 w-6 flex-shrink-0">
 												<span
@@ -308,9 +313,10 @@
 										hidden
 										method="POST"
 										action="?/deleteItem"
-										use:enhance={() =>
-											async ({ update }) =>
-												update({ invalidateAll: false })}
+										use:enhance={() => {
+											optimistic.remove(item.id);
+											return async ({ update }) => update({ invalidateAll: false });
+										}}
 										id="del-{item.id}"
 									>
 										<input type="hidden" name="itemId" value={item.id} />
@@ -328,10 +334,20 @@
 		<form
 			method="POST"
 			action="?/addItem"
-			use:enhance={() => {
+			use:enhance={({ formData }) => {
+				const id = optimistic.add(newItemName.trim(), newItemQty.trim());
+				formData.set('id', id);
 				newItemName = '';
 				newItemQty = '';
-				return async ({ update }) => update({ invalidateAll: false });
+				return async ({ update, result }) => {
+					if (result.type === 'success' && !result.data?.error) {
+						optimistic.confirm(id);
+					} else {
+						optimistic.remove(id);
+						addToast(String(result.type === 'success' && result.data?.error || 'Could not add item'), 'error');
+					}
+					await update({ invalidateAll: false });
+				};
 			}}
 			class="mt-3 px-4"
 		>

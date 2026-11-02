@@ -6,6 +6,8 @@ import { sendPushToUser } from '$lib/server/push';
 import { today } from '$lib/server/date';
 import type { PageServerLoad, Actions } from './$types';
 
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 async function getOrCreateList(date: string) {
 	const [existing] = await db
 		.select()
@@ -119,6 +121,9 @@ export const actions: Actions = {
 		const data = await request.formData();
 		const name = data.get('name')?.toString().trim() || '';
 		const quantity = data.get('quantity')?.toString().trim() || '1';
+		// The client generates the id so it can show the item before this action returns.
+		const idRaw = data.get('id')?.toString() || '';
+		const id = UUID_RE.test(idRaw) ? idRaw : undefined;
 
 		if (!name) return { error: 'Item name is required' };
 
@@ -130,6 +135,7 @@ export const actions: Actions = {
 			.where(eq(shopping_items.list_id, list.id));
 
 		await db.insert(shopping_items).values({
+			id,
 			list_id: list.id,
 			name,
 			quantity,
