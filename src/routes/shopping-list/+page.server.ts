@@ -6,6 +6,8 @@ import { sendPushToUser } from '$lib/server/push';
 import { today } from '$lib/server/date';
 import type { PageServerLoad, Actions } from './$types';
 
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 async function getOrCreateList(date: string) {
 	const [existing] = await db
 		.select()
@@ -33,7 +35,7 @@ async function getOrCreateList(date: string) {
 export const load: PageServerLoad = async ({ depends }) => {
 	depends('shopping-list');
 
-	const [todayList, allRecipes, allUsers, lists] = await Promise.all([
+	const [todayList, todayItems, allRecipes, allUsers, lists] = await Promise.all([
 		db
 			.select()
 			.from(shopping_lists)
@@ -41,10 +43,21 @@ export const load: PageServerLoad = async ({ depends }) => {
 			.limit(1)
 			.then((r) => r[0] ?? null),
 		db
+			.select({ item: shopping_items })
+			.from(shopping_items)
+			.innerJoin(shopping_lists, eq(shopping_items.list_id, shopping_lists.id))
+			.where(eq(shopping_lists.date, today()))
+			.orderBy(asc(shopping_items.position))
+			.then((r) => r.map((row) => row.item)),
+		db
 			.select({
 				id: recipes.id,
 				name: recipes.name,
-				ingredientCount: sql<number>`count(${ingredients.id})`.mapWith(Number)
+				ingredientCount: sql<number>`count(${ingredients.id})`.mapWith(Number),
+				// Lets the client show a recipe's items before the addRecipe action returns.
+				ingredients: sql<
+					{ id: string; name: string; quantity: string | null }[]
+				>`coalesce(json_agg(json_build_object('id', ${ingredients.id}, 'name', ${ingredients.name}, 'quantity', ${ingredients.quantity}) order by ${ingredients.position}) filter (where ${ingredients.id} is not null), '[]')`
 			})
 			.from(recipes)
 			.leftJoin(ingredients, eq(ingredients.recipe_id, recipes.id))
@@ -70,23 +83,7 @@ export const load: PageServerLoad = async ({ depends }) => {
 			.orderBy(shopping_lists.date)
 	]);
 
-	const [todayItems, assignedToUser] = await Promise.all([
-		todayList
-			? db
-					.select()
-					.from(shopping_items)
-					.where(eq(shopping_items.list_id, todayList.id))
-					.orderBy(asc(shopping_items.position))
-			: Promise.resolve([] as (typeof shopping_items.$inferSelect)[]),
-		todayList?.assigned_to
-			? db
-					.select({ id: users.id, username: users.username })
-					.from(users)
-					.where(eq(users.id, todayList.assigned_to))
-					.limit(1)
-					.then((r) => r[0] ?? null)
-			: Promise.resolve(null as { id: number; username: string } | null)
-	]);
+	const assignedToUser = allUsers.find((u) => u.id === todayList?.assigned_to) ?? null;
 
 	return {
 		todayList,
@@ -128,6 +125,9 @@ export const actions: Actions = {
 		const data = await request.formData();
 		const name = data.get('name')?.toString().trim() || '';
 		const quantity = data.get('quantity')?.toString().trim() || '1';
+		// The client generates the id so it can show the item before this action returns.
+		const idRaw = data.get('id')?.toString() || '';
+		const id = UUID_RE.test(idRaw) ? idRaw : undefined;
 
 		if (!name) return { error: 'Item name is required' };
 
@@ -139,6 +139,7 @@ export const actions: Actions = {
 			.where(eq(shopping_items.list_id, list.id));
 
 		await db.insert(shopping_items).values({
+			id,
 			list_id: list.id,
 			name,
 			quantity,
@@ -159,6 +160,13 @@ export const actions: Actions = {
 		const data = await request.formData();
 		const recipeId = data.get('recipeId')?.toString() || '';
 		const mode = data.get('mode')?.toString() || 'add_all';
+		// Ingredient id -> client-generated item id, so the client can show the items right away.
+		let itemIds: Record<string, unknown> = {};
+		try {
+			itemIds = JSON.parse(data.get('itemIds')?.toString() || '{}') ?? {};
+		} catch {
+			itemIds = {};
+		}
 
 		if (!recipeId) return { error: 'Recipe ID is required' };
 
@@ -215,6 +223,7 @@ export const actions: Actions = {
 		let pos = (maxPos?.max ?? -1) + 1;
 		await db.insert(shopping_items).values(
 			toInsert.map((ing) => ({
+				id: UUID_RE.test(String(itemIds[ing.id] ?? '')) ? String(itemIds[ing.id]) : undefined,
 				list_id: list.id,
 				name: ing.name,
 				quantity: ing.quantity,

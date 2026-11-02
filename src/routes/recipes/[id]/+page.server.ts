@@ -5,24 +5,25 @@ import { broadcast } from '$lib/server/sse';
 import type { PageServerLoad, Actions } from './$types';
 
 export const load: PageServerLoad = async ({ params }) => {
-	const [recipe] = await db
-		.select({
-			id: recipes.id,
-			name: recipes.name,
-			description: recipes.description,
-			updated_at: recipes.updated_at
-		})
-		.from(recipes)
-		.where(eq(recipes.id, params.id))
-		.limit(1);
+	const [[recipe], ings] = await Promise.all([
+		db
+			.select({
+				id: recipes.id,
+				name: recipes.name,
+				description: recipes.description,
+				updated_at: recipes.updated_at
+			})
+			.from(recipes)
+			.where(eq(recipes.id, params.id))
+			.limit(1),
+		db
+			.select()
+			.from(ingredients)
+			.where(eq(ingredients.recipe_id, params.id))
+			.orderBy(asc(ingredients.position))
+	]);
 
 	if (!recipe) return { notFound: true as const, recipe: null, ingredients: [] };
-
-	const ings = await db
-		.select()
-		.from(ingredients)
-		.where(eq(ingredients.recipe_id, params.id))
-		.orderBy(asc(ingredients.position));
 
 	return { recipe, ingredients: ings, notFound: false as const };
 };

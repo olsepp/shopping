@@ -6,6 +6,7 @@
 	import { ArrowLeft, MoreHorizontal, Plus, Check, Trash2, UserPlus, Loader2 } from 'lucide-svelte';
 	import { swipe } from '$lib/swipe.svelte';
 	import { addToast } from '$lib/toast.svelte';
+	import { OptimisticItems } from '$lib/optimistic-items.svelte';
 	import { fly, fade } from 'svelte/transition';
 	import { cubicOut } from 'svelte/easing';
 
@@ -26,7 +27,9 @@
 
 	let dateObj = $derived(parseISO(data.date));
 	let humanDate = $derived(format(dateObj, 'EEEE, d MMMM'));
-	let allChecked = $derived(data.items.length > 0 && data.items.every((i) => i.checked));
+	const optimistic = new OptimisticItems(() => data.items);
+	let items = $derived(optimistic.all);
+	let allChecked = $derived(items.length > 0 && items.every((i) => i.checked));
 	let showAllDone = $state(false);
 	let allDoneTimer: ReturnType<typeof setTimeout> | null = null;
 	let swipeOffsets = $state<Record<string, number>>({});
@@ -46,8 +49,8 @@
 	});
 
 	let groups = $derived.by(() => {
-		const map = new Map<string, { name: string; items: typeof data.items }>();
-		for (const item of data.items) {
+		const map = new Map<string, { name: string; items: typeof items }>();
+		for (const item of items) {
 			const key = item.source_recipe_name || 'Other';
 			if (!map.has(key)) map.set(key, { name: key, items: [] });
 			map.get(key)!.items.push(item);
@@ -82,7 +85,7 @@
 		</div>
 	{/if}
 
-	{#if !data.list || (data.items.length === 0 && !manualAdd)}
+	{#if items.length === 0 && (!data.list || !manualAdd)}
 		<div class="flex flex-col items-center justify-center px-4 py-16">
 			{#if !manualAdd}
 				<p class="mb-6 text-muted">No shopping list for this day yet</p>
@@ -112,9 +115,11 @@
 							{@const pending = pendingChecks.has(item.id)}
 							{@const isChecked = pending ? pendingChecks.get(item.id)! : item.checked}
 							{@const offsetX = swipeOffsets[item.id] ?? 0}
+							{@const adding = optimistic.isPending(item.id)}
 							<div
 								use:swipe={{
 									onSwipeLeft: () => {
+										if (optimistic.isPending(item.id)) return;
 										const form = document.getElementById(`del-${item.id}`) as HTMLFormElement;
 										form?.requestSubmit();
 									},
@@ -154,10 +159,10 @@
 										<input type="hidden" name="checked" value={String(!isChecked)} />
 										<button
 											type="submit"
-											class={`flex w-full items-center gap-3 px-4 py-3 text-left ${
+											class={`flex w-full items-center gap-3 px-4 py-3 text-left transition-opacity ${
 												isChecked ? 'line-through opacity-70' : ''
-											}`}
-											disabled={pending}
+											} ${adding ? 'opacity-50' : ''}`}
+											disabled={pending || adding}
 										>
 											<span class="relative h-6 w-6 flex-shrink-0">
 												<span
@@ -188,9 +193,10 @@
 										</button>
 									</form>
 									<form hidden method="POST" action="?/deleteItem"
-										use:enhance={() =>
-											async ({ update }) =>
-												update({ invalidateAll: false })}
+										use:enhance={() => {
+											optimistic.remove(item.id);
+											return async ({ update }) => update({ invalidateAll: false });
+										}}
 										id="del-{item.id}">
 										<input type="hidden" name="itemId" value={item.id} />
 									</form>
@@ -207,10 +213,20 @@
 		<form
 			method="POST"
 			action="?/addItem"
-			use:enhance={() => {
+			use:enhance={({ formData }) => {
+				const id = optimistic.add({ name: newItemName.trim(), quantity: newItemQty.trim() });
+				formData.set('id', id);
 				newItemName = '';
 				newItemQty = '';
-				return async ({ update }) => update({ invalidateAll: false });
+				return async ({ update, result }) => {
+					if (result.type === 'success' && !result.data?.error) {
+						optimistic.confirm(id);
+					} else {
+						optimistic.remove(id);
+						addToast(String(result.type === 'success' && result.data?.error || 'Could not add item'), 'error');
+					}
+					await update({ invalidateAll: false });
+				};
 			}}
 			class="mt-3 px-4"
 		>
@@ -274,9 +290,9 @@
 				<form
 					method="POST"
 					action="?/addRecipe"
-					use:enhance={() => {
+					use:enhance={(input) => {
 						recipePickerOpen = false;
-						return async ({ update }) => update({ invalidateAll: false });
+						return optimistic.addRecipe(recipe, 'check_duplicates')(input);
 					}}
 				>
 					<input type="hidden" name="recipeId" value={recipe.id} />
@@ -311,9 +327,10 @@
 			</p>
 			<div class="flex flex-col gap-2">
 				<form method="POST" action="?/addRecipe"
-					use:enhance={() =>
-						async ({ update }) =>
-							update({ invalidateAll: false })}
+					use:enhance={optimistic.addRecipe(
+						data.recipes.find((r) => r.id === rid),
+						'add_all'
+					)}
 				>
 					<input type="hidden" name="recipeId" value={rid} />
 					<input type="hidden" name="mode" value="add_all" />
@@ -325,9 +342,10 @@
 					</button>
 				</form>
 				<form method="POST" action="?/addRecipe"
-					use:enhance={() =>
-						async ({ update }) =>
-							update({ invalidateAll: false })}
+					use:enhance={optimistic.addRecipe(
+						data.recipes.find((r) => r.id === rid),
+						'skip_duplicates'
+					)}
 				>
 					<input type="hidden" name="recipeId" value={rid} />
 					<input type="hidden" name="mode" value="skip_duplicates" />

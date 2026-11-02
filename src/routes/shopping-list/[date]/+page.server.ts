@@ -5,50 +5,46 @@ import { broadcast } from '$lib/server/sse';
 import { sendPushToUser } from '$lib/server/push';
 import type { PageServerLoad, Actions } from './$types';
 
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 export const load: PageServerLoad = async ({ params, depends }) => {
 	depends('shopping-list');
 	const date = params.date;
 
-	const [list] = await db
-		.select()
-		.from(shopping_lists)
-		.where(eq(shopping_lists.date, date))
-		.limit(1);
-
-	let items: (typeof shopping_items.$inferSelect)[] = [];
-	if (list) {
-		items = await db
+	// All queries are independent, so run them in a single parallel round.
+	// Items are fetched by date via a join so they don't wait on the list query.
+	const [list, items, allRecipes, allUsers] = await Promise.all([
+		db
 			.select()
+			.from(shopping_lists)
+			.where(eq(shopping_lists.date, date))
+			.limit(1)
+			.then((r) => r[0]),
+		db
+			.select({ item: shopping_items })
 			.from(shopping_items)
-			.where(eq(shopping_items.list_id, list.id))
-			.orderBy(asc(shopping_items.position));
-	}
+			.innerJoin(shopping_lists, eq(shopping_items.list_id, shopping_lists.id))
+			.where(eq(shopping_lists.date, date))
+			.orderBy(asc(shopping_items.position))
+			.then((r) => r.map((row) => row.item)),
+		db
+			.select({
+				id: recipes.id,
+				name: recipes.name,
+				ingredientCount: sql<number>`count(${ingredients.id})`.mapWith(Number),
+				// Lets the client show a recipe's items before the addRecipe action returns.
+				ingredients: sql<
+					{ id: string; name: string; quantity: string | null }[]
+				>`coalesce(json_agg(json_build_object('id', ${ingredients.id}, 'name', ${ingredients.name}, 'quantity', ${ingredients.quantity}) order by ${ingredients.position}) filter (where ${ingredients.id} is not null), '[]')`
+			})
+			.from(recipes)
+			.leftJoin(ingredients, eq(ingredients.recipe_id, recipes.id))
+			.groupBy(recipes.id)
+			.orderBy(asc(recipes.name)),
+		db.select({ id: users.id, username: users.username }).from(users).orderBy(asc(users.username))
+	]);
 
-	const allRecipes = await db
-		.select({
-			id: recipes.id,
-			name: recipes.name,
-			ingredientCount: sql<number>`count(${ingredients.id})`.mapWith(Number)
-		})
-		.from(recipes)
-		.leftJoin(ingredients, eq(ingredients.recipe_id, recipes.id))
-		.groupBy(recipes.id)
-		.orderBy(asc(recipes.name));
-
-	const allUsers = await db
-		.select({ id: users.id, username: users.username })
-		.from(users)
-		.orderBy(asc(users.username));
-
-	let assignedToUser: { id: number; username: string } | null = null;
-	if (list?.assigned_to) {
-		const [assigned] = await db
-			.select({ id: users.id, username: users.username })
-			.from(users)
-			.where(eq(users.id, list.assigned_to))
-			.limit(1);
-		assignedToUser = assigned ?? null;
-	}
+	const assignedToUser = allUsers.find((u) => u.id === list?.assigned_to) ?? null;
 
 	return {
 		list,
@@ -100,6 +96,9 @@ export const actions: Actions = {
 		const data = await request.formData();
 		const name = data.get('name')?.toString().trim() || '';
 		const quantity = data.get('quantity')?.toString().trim() || '1';
+		// The client generates the id so it can show the item before this action returns.
+		const idRaw = data.get('id')?.toString() || '';
+		const id = UUID_RE.test(idRaw) ? idRaw : undefined;
 
 		if (!name) return { error: 'Item name is required' };
 
@@ -111,6 +110,7 @@ export const actions: Actions = {
 			.where(eq(shopping_items.list_id, list.id));
 
 		await db.insert(shopping_items).values({
+			id,
 			list_id: list.id,
 			name,
 			quantity,
@@ -131,6 +131,13 @@ export const actions: Actions = {
 		const data = await request.formData();
 		const recipeId = data.get('recipeId')?.toString() || '';
 		const mode = data.get('mode')?.toString() || 'add_all';
+		// Ingredient id -> client-generated item id, so the client can show the items right away.
+		let itemIds: Record<string, unknown> = {};
+		try {
+			itemIds = JSON.parse(data.get('itemIds')?.toString() || '{}') ?? {};
+		} catch {
+			itemIds = {};
+		}
 
 		if (!recipeId) return { error: 'Recipe ID is required' };
 
@@ -187,6 +194,7 @@ export const actions: Actions = {
 		let pos = (maxPos?.max ?? -1) + 1;
 		await db.insert(shopping_items).values(
 			toInsert.map((ing) => ({
+				id: UUID_RE.test(String(itemIds[ing.id] ?? '')) ? String(itemIds[ing.id]) : undefined,
 				list_id: list.id,
 				name: ing.name,
 				quantity: ing.quantity,
